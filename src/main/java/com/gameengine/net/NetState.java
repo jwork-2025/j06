@@ -7,7 +7,8 @@ public final class NetState {
     private static final AtomicInteger clientCount = new AtomicInteger(0);
     private static volatile float p2vx = 0f;
     private static volatile float p2vy = 0f;
-    private static volatile String lastState = null; // server构建的状态文本
+    private static volatile String lastState = null; // 旧文本
+    private static volatile String lastKeyframeJson = null; // 新JSON KF
     private static final ConcurrentHashMap<String, float[]> clientMirror = new ConcurrentHashMap<>();
     private NetState() {}
     public static void clientConnected() { clientCount.incrementAndGet(); }
@@ -20,6 +21,8 @@ public final class NetState {
     // server 侧设置当前状态（文本行，形如 STATE:id,x,y;id2,x,y）
     public static void setLastState(String s) { lastState = s; }
     public static String getLastState() { return lastState; }
+    public static void setLastKeyframeJson(String s) { lastKeyframeJson = s; }
+    public static String getLastKeyframeJson() { return lastKeyframeJson; }
 
     // client 侧接收状态并更新镜像
     public static void updateMirrorFromState(String line) {

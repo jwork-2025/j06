@@ -41,10 +41,7 @@ public class GameEngine {
     }
     
     public void run() {
-        if (!initialize()) {
-            System.err.println("游戏引擎初始化失败");
-            return;
-        }
+        if (!initialize()) { return; }
         
         running = true;
         
@@ -179,9 +176,7 @@ public class GameEngine {
             if (service != null && currentScene != null) {
                 service.start(currentScene, renderer.getWidth(), renderer.getHeight());
             }
-        } catch (Exception e) {
-            System.err.println("录制启动失败: " + e.getMessage());
-        }
+        } catch (Exception e) { }
     }
 
     public void disableRecording() {

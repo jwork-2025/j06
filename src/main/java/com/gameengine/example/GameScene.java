@@ -24,6 +24,7 @@ public class GameScene extends Scene {
     private ParticleSystem playerParticles;
     private List<ParticleSystem> collisionParticles;
     private Map<GameObject, ParticleSystem> aiPlayerParticles;
+    private Map<GameObject, ParticleSystem> mirrorParticles;
     private boolean waitingReturn;
     private float waitInputTimer;
     private float freezeTimer;
@@ -67,6 +68,7 @@ public class GameScene extends Scene {
 
         collisionParticles = new ArrayList<>();
         aiPlayerParticles = new HashMap<>();
+        mirrorParticles = new HashMap<>();
 
         playerParticles = new ParticleSystem(renderer, new Vector2(renderer.getWidth() / 2.0f, renderer.getHeight() / 2.0f));
         playerParticles.setActive(true);
@@ -75,8 +77,32 @@ public class GameScene extends Scene {
 
     @Override
     public void update(float deltaTime) {
-        super.update(deltaTime);
         time += deltaTime;
+
+        // CLIENT 优先应用镜像，再统一调用组件更新，确保可视化读取到本帧位置
+        if (mode == Mode.CLIENT) {
+            java.util.Map<String, float[]> snap = com.gameengine.net.NetworkBuffer.sample();
+            for (java.util.Map.Entry<String, float[]> e : snap.entrySet()) {
+                String id = e.getKey();
+                float[] xy = e.getValue();
+                GameObject obj = findOrCreateMirror(id);
+                TransformComponent tc = obj.getComponent(TransformComponent.class);
+                if (tc != null) tc.setPosition(new Vector2(xy[0], xy[1]));
+
+                // 为镜像对象维护轻量粒子
+                ParticleSystem ps = mirrorParticles.get(obj);
+                if (ps == null) {
+                    ps = new ParticleSystem(renderer, tc != null ? tc.getPosition() : new Vector2(0,0), ParticleSystem.Config.light());
+                    ps.setActive(true);
+                    mirrorParticles.put(obj, ps);
+                } else {
+                    if (tc != null) ps.setPosition(tc.getPosition());
+                }
+                ps.update(deltaTime);
+            }
+        }
+
+        super.update(deltaTime);
 
         if (mode == Mode.SERVER) {
             gameLogic.handlePlayerInput(deltaTime);
@@ -119,9 +145,7 @@ public class GameScene extends Scene {
             }
         }
 
-        if (mode == Mode.SERVER) {
-            updateParticles(deltaTime);
-        }
+        updateParticles(deltaTime);
 
         if (waitingReturn) {
             waitInputTimer += deltaTime;
@@ -134,7 +158,7 @@ public class GameScene extends Scene {
             return;
         }
 
-        if (mode == Mode.SERVER && time >= 1.0f) {
+        if (mode == Mode.SERVER && !gameLogic.isGameOver() && time >= 1.0f) {
             if (!networkPlayerSpawned && com.gameengine.net.NetState.hasClient()) {
                 createNetworkPlayer();
                 networkPlayerSpawned = true;
@@ -143,34 +167,32 @@ public class GameScene extends Scene {
             time = 0;
         }
 
-        // SERVER 广播状态快照
+        // SERVER 广播 JSON 关键帧
         if (mode == Mode.SERVER) {
-            StringBuilder sb = new StringBuilder();
-            sb.append("STATE:");
-            boolean first = true;
-            int idx = 0;
+            StringBuilder js = new StringBuilder();
+            js.append('{').append("\"type\":\"kf\",")
+              .append("\"t\":").append(System.currentTimeMillis()/1000.0).append(',')
+              .append("\"entities\":[");
+            boolean first = true; int idx = 0;
             for (GameObject obj : getGameObjects()) {
                 TransformComponent tc = obj.getComponent(TransformComponent.class);
                 if (tc == null) continue;
                 Vector2 p = tc.getPosition();
-                if (!first) sb.append(';');
-                sb.append(obj.getName()).append('#').append(idx++).append(',').append((int)p.x).append(',').append((int)p.y);
+                if (!first) js.append(',');
+                String id = obj.getName();
+                if (!id.contains("#")) id = id + "#" + (idx++);
+                js.append('{')
+                  .append("\"id\":\"").append(id).append("\",")
+                  .append("\"x\":").append((int)p.x).append(',')
+                  .append("\"y\":").append((int)p.y)
+                  .append('}');
                 first = false;
             }
-            com.gameengine.net.NetState.setLastState(sb.toString());
+            js.append(']').append('}');
+            com.gameengine.net.NetState.setLastKeyframeJson(js.toString());
         }
 
-        // CLIENT 应用镜像
-        if (mode == Mode.CLIENT) {
-            java.util.Map<String, float[]> snap = com.gameengine.net.NetState.getMirrorSnapshot();
-            for (java.util.Map.Entry<String, float[]> e : snap.entrySet()) {
-                String id = e.getKey();
-                float[] xy = e.getValue();
-                GameObject obj = findOrCreateMirror(id);
-                TransformComponent tc = obj.getComponent(TransformComponent.class);
-                if (tc != null) tc.setPosition(new Vector2(xy[0], xy[1]));
-            }
-        }
+        
     }
 
     private void updateParticles(float deltaTime) {
@@ -267,6 +289,15 @@ public class GameScene extends Scene {
         for (ParticleSystem ps : collisionParticles) {
             if (ps != null && ps.getParticleCount() > 0) {
                 ps.render();
+            }
+        }
+
+        // CLIENT: 渲染镜像对象的粒子
+        if (mirrorParticles != null && !mirrorParticles.isEmpty()) {
+            for (ParticleSystem ps : mirrorParticles.values()) {
+                if (ps != null && ps.getParticleCount() > 0) {
+                    ps.render();
+                }
             }
         }
     }
@@ -415,19 +446,35 @@ public class GameScene extends Scene {
         for (GameObject o : getGameObjects()) {
             if (id.equals(o.getName())) return o;
         }
-        GameObject ghost = new GameObject(id) {
-            @Override public void update(float dt) { super.update(dt); updateComponents(dt); }
-            @Override public void render() { renderComponents(); }
-        };
-        ghost.addComponent(new TransformComponent(new Vector2(0,0)));
-        RenderComponent rc = ghost.addComponent(new RenderComponent(
-            RenderComponent.RenderType.RECTANGLE,
-            new Vector2(10,10),
-            new RenderComponent.Color(0.9f,0.9f,0.2f,1f)
-        ));
-        rc.setRenderer(renderer);
-        addGameObject(ghost);
-        return ghost;
+        String base = id;
+        int hash = id.indexOf('#');
+        if (hash >= 0) base = id.substring(0, hash);
+        GameObject obj;
+        if (base.equalsIgnoreCase("AIPlayer")) {
+            obj = EntityFactory.createAIVisual(renderer, 20, 20, 0.0f, 0.8f, 1.0f, 1.0f);
+        } else if (base.equalsIgnoreCase("Player") || base.toLowerCase().startsWith("player")) {
+            obj = EntityFactory.createPlayerVisual(renderer);
+            // 确保有 Transform 以便定位
+            if (obj.getComponent(TransformComponent.class) == null) {
+                obj.addComponent(new TransformComponent(new Vector2(0, 0)));
+            }
+        } else {
+            // 其他：默认小方块占位
+            obj = new GameObject(id) {
+                @Override public void update(float dt) { super.update(dt); updateComponents(dt); }
+                @Override public void render() { renderComponents(); }
+            };
+            obj.addComponent(new TransformComponent(new Vector2(0,0)));
+            RenderComponent rc = obj.addComponent(new RenderComponent(
+                RenderComponent.RenderType.RECTANGLE,
+                new Vector2(10,10),
+                new RenderComponent.Color(0.9f,0.9f,0.2f,1f)
+            ));
+            rc.setRenderer(renderer);
+        }
+        obj.setName(id);
+        addGameObject(obj);
+        return obj;
     }
 
     private void createDecorations() {

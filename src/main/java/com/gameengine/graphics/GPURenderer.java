@@ -101,9 +101,7 @@ public class GPURenderer implements IRenderer {
             String glVersion = GL11.glGetString(GL11.GL_VERSION);
             String glRenderer = GL11.glGetString(GL11.GL_RENDERER);
             
-            if (glVersion == null || glRenderer == null) {
-                System.err.println("OpenGL上下文无效：无法获取版本/渲染器字符串");
-            }
+            
             
             initialized = true;
             
@@ -111,11 +109,6 @@ public class GPURenderer implements IRenderer {
             maxTex[0] = GL11.glGetInteger(GL11.GL_MAX_TEXTURE_SIZE);
 
             int testTex = createTestTexture();
-            System.out.println("测试纹理创建: id=" + testTex + (testTex > 0 ? " (OK)" : " (失败)"));
-            System.out.println("GPU渲染器初始化成功！");
-            System.out.println("OpenGL版本: " + glVersion);
-            System.out.println("渲染器: " + glRenderer);
-            System.out.println("最大纹理尺寸: " + maxTex[0]);
             
             // 仅在上下文确认有效后再预加载纹理
             preloadTextures();
@@ -189,10 +182,7 @@ public class GPURenderer implements IRenderer {
         GL11.glVertex2f(x + w, y + h);
         GL11.glVertex2f(x, y + h);
         GL11.glEnd();
-        int err = GL11.glGetError();
-        if (err != GL11.GL_NO_ERROR) {
-            System.err.println("[GPURenderer] drawRect GL error: 0x" + Integer.toHexString(err));
-        }
+        
     }
     
     @Override
@@ -301,7 +291,6 @@ public class GPURenderer implements IRenderer {
         }
         
         texturesPreloaded = true;
-        System.out.println("预加载字符纹理完成: " + loaded + " 成功, " + failed + " 失败");
     }
     
     private int getCharTexture(char c) {
@@ -371,10 +360,7 @@ public class GPURenderer implements IRenderer {
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
             
             int prevError = GL11.glGetError();
-            while (prevError != GL11.GL_NO_ERROR) {
-                System.err.println("Clearing OpenGL error before genTextures for '" + c + "': " + Integer.toHexString(prevError));
-                prevError = GL11.glGetError();
-            }
+            while (prevError != GL11.GL_NO_ERROR) { prevError = GL11.glGetError(); }
             
             int textureId;
             try {
@@ -385,35 +371,15 @@ public class GPURenderer implements IRenderer {
                 textureId = GL11.glGenTextures();
             }
             
-            if (textureId <= 0) {
-                int genError = GL11.glGetError();
-                System.err.println("glGenTextures returned 0 or negative for char '" + c + "'");
-                if (genError != GL11.GL_NO_ERROR) {
-                    System.err.println("OpenGL error code: 0x" + Integer.toHexString(genError));
-                } else {
-                    System.err.println("No OpenGL error reported, but textureId is invalid. Possible causes:");
-                    System.err.println("  - OpenGL context not properly initialized");
-                    System.err.println("  - Reached texture limit");
-                    System.err.println("  - Graphics driver issue");
-                }
-                return 0;
-            }
+            if (textureId <= 0) { return 0; }
             
             int genError = GL11.glGetError();
-            if (genError != GL11.GL_NO_ERROR) {
-                System.err.println("OpenGL error after glGenTextures for '" + c + "': 0x" + Integer.toHexString(genError));
-                GL11.glDeleteTextures(textureId);
-                return 0;
-            }
+            if (genError != GL11.GL_NO_ERROR) { GL11.glDeleteTextures(textureId); return 0; }
             
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
             
             int bindError = GL11.glGetError();
-            if (bindError != GL11.GL_NO_ERROR) {
-                System.err.println("OpenGL error binding texture for '" + c + "': " + Integer.toHexString(bindError));
-                GL11.glDeleteTextures(textureId);
-                return 0;
-            }
+            if (bindError != GL11.GL_NO_ERROR) { GL11.glDeleteTextures(textureId); return 0; }
             
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
@@ -422,21 +388,13 @@ public class GPURenderer implements IRenderer {
             GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA, fontSize, fontSize, 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buffer);
             
             int texError = GL11.glGetError();
-            if (texError != GL11.GL_NO_ERROR) {
-                System.err.println("OpenGL error uploading texture data for '" + c + "': " + Integer.toHexString(texError));
-                GL11.glDeleteTextures(textureId);
-                return 0;
-            }
+            if (texError != GL11.GL_NO_ERROR) { GL11.glDeleteTextures(textureId); return 0; }
             
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
             GL11.glDisable(GL11.GL_TEXTURE_2D);
             
             return textureId;
-        } catch (Exception e) {
-            System.err.println("Exception creating texture for char '" + c + "': " + e.getMessage());
-            e.printStackTrace();
-            return 0;
-        }
+        } catch (Exception e) { return 0; }
     }
 
     private int createTestTexture() {
@@ -466,50 +424,8 @@ public class GPURenderer implements IRenderer {
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
             GL11.glDisable(GL11.GL_TEXTURE_2D);
             return id;
-        } catch (Throwable t) {
-            System.err.println("测试纹理创建异常: " + t.getMessage());
-            return 0;
-        }
+        } catch (Throwable t) { return 0; }
     }
-    
-    private void drawThickLine(float x1, float y1, float x2, float y2, float thickness, float r, float g, float b, float a) {
-        float dx = x2 - x1;
-        float dy = y2 - y1;
-        float len = (float) Math.sqrt(dx * dx + dy * dy);
-        if (len < 0.001f) {
-            return;
-        }
-        
-        float halfThick = thickness * 0.5f;
-        float nx = 0.0f, ny = 0.0f;
-        
-        if (Math.abs(dx) < 0.001f) {
-            nx = halfThick;
-            ny = 0.0f;
-        } else if (Math.abs(dy) < 0.001f) {
-            nx = 0.0f;
-            ny = halfThick;
-        } else {
-            float invLen = 1.0f / len;
-            nx = -dy * invLen * halfThick;
-            ny = dx * invLen * halfThick;
-        }
-        
-        GL11.glPushMatrix();
-        GL11.glLoadIdentity();
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_LIGHTING);
-        GL11.glColor4f(r, g, b, a);
-        GL11.glBegin(GL11.GL_TRIANGLE_STRIP);
-        GL11.glVertex2f(x1 - nx, y1 - ny);
-        GL11.glVertex2f(x1 + nx, y1 + ny);
-        GL11.glVertex2f(x2 - nx, y2 - ny);
-        GL11.glVertex2f(x2 + nx, y2 + ny);
-        GL11.glEnd();
-        GL11.glPopMatrix();
-    }
-    
-    
     
     @Override
     public boolean shouldClose() {

@@ -70,11 +70,11 @@ public class NioServer implements Runnable {
                     }
                 }
                 long now = System.currentTimeMillis();
-                if (now - lastBroadcast >= 100) {
+                if (now - lastBroadcast >= 50) {
                     lastBroadcast = now;
-                    String state = NetState.getLastState();
-                    if (state != null && !state.isEmpty()) {
-                        ByteBuffer out = ByteBuffer.wrap((state + "\n").getBytes());
+                    String json = NetState.getLastKeyframeJson();
+                    if (json != null && !json.isEmpty()) {
+                        ByteBuffer out = ByteBuffer.wrap((json + "\n").getBytes());
                         for (int i = conns.size() - 1; i >= 0; i--) {
                             SocketChannel ch = conns.get(i);
                             if (!ch.isOpen()) { conns.remove(i); continue; }

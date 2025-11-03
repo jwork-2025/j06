@@ -77,7 +77,12 @@ public class NioClient {
                         String line = sb.substring(0, idx).trim();
                         sb.delete(0, idx + 1);
                         if (!line.isEmpty()) {
-                            com.gameengine.net.NetState.updateMirrorFromState(line);
+                            NetworkBuffer.Keyframe kf = NetworkBuffer.parseJsonLine(line);
+                            if (kf != null) {
+                                NetworkBuffer.push(kf);
+                            } else {
+                                com.gameengine.net.NetState.updateMirrorFromState(line); // 兼容旧文本
+                            }
                         }
                     }
                 }

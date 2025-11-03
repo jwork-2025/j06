@@ -5,7 +5,7 @@ set -e
 ./run.sh &
 SERVER_PID=$!
 
-sleep 2
+sleep 1
 
 # 启动 client（连接到本机）
 ./run_client.sh 127.0.0.1

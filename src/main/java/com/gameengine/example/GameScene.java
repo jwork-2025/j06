@@ -148,12 +148,13 @@ public class GameScene extends Scene {
             StringBuilder sb = new StringBuilder();
             sb.append("STATE:");
             boolean first = true;
+            int idx = 0;
             for (GameObject obj : getGameObjects()) {
                 TransformComponent tc = obj.getComponent(TransformComponent.class);
                 if (tc == null) continue;
                 Vector2 p = tc.getPosition();
                 if (!first) sb.append(';');
-                sb.append(obj.getName()).append(',').append((int)p.x).append(',').append((int)p.y);
+                sb.append(obj.getName()).append('#').append(idx++).append(',').append((int)p.x).append(',').append((int)p.y);
                 first = false;
             }
             com.gameengine.net.NetState.setLastState(sb.toString());

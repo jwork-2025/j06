@@ -1,7 +1,6 @@
 package com.gameengine.graphics;
 
 import com.gameengine.input.InputManager;
-import com.gameengine.math.Vector2;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.KeyAdapter;
@@ -11,9 +10,6 @@ import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 渲染器
- */
 public class Renderer extends JFrame {
     private int width;
     private int height;
@@ -46,7 +42,6 @@ public class Renderer extends JFrame {
     }
     
     private void setupInput() {
-        // 键盘输入
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -59,7 +54,6 @@ public class Renderer extends JFrame {
             }
         });
         
-        // 鼠标输入
         addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
@@ -83,63 +77,41 @@ public class Renderer extends JFrame {
         requestFocus();
     }
     
-    /**
-     * 开始渲染帧
-     */
     public void beginFrame() {
         gamePanel.clear();
     }
     
-    /**
-     * 结束渲染帧
-     */
     public void endFrame() {
         gamePanel.repaint();
     }
     
-    /**
-     * 绘制矩形
-     */
     public void drawRect(float x, float y, float width, float height, float r, float g, float b, float a) {
         gamePanel.addDrawable(new RectDrawable(x, y, width, height, r, g, b, a));
     }
     
-    /**
-     * 绘制圆形
-     */
     public void drawCircle(float x, float y, float radius, int segments, float r, float g, float b, float a) {
         gamePanel.addDrawable(new CircleDrawable(x, y, radius, r, g, b, a));
     }
     
-    /**
-     * 绘制线条
-     */
     public void drawLine(float x1, float y1, float x2, float y2, float r, float g, float b, float a) {
         gamePanel.addDrawable(new LineDrawable(x1, y1, x2, y2, r, g, b, a));
     }
     
-    /**
-     * 检查窗口是否应该关闭
-     */
+    public void drawText(float x, float y, String text, float r, float g, float b, float a) {
+        gamePanel.addDrawable(new TextDrawable(x, y, text, r, g, b, a));
+    }
+    
     public boolean shouldClose() {
         return !isVisible();
     }
     
-    /**
-     * 处理事件
-     */
     public void pollEvents() {
-        // Swing自动处理事件
     }
     
-    /**
-     * 清理资源
-     */
     public void cleanup() {
         dispose();
     }
     
-    // Getters
     public int getWidth() {
         return width;
     }
@@ -152,9 +124,6 @@ public class Renderer extends JFrame {
         return title;
     }
     
-    /**
-     * 游戏面板类
-     */
     private class GamePanel extends JPanel {
         private List<Drawable> drawables = new ArrayList<>();
         
@@ -183,16 +152,10 @@ public class Renderer extends JFrame {
         }
     }
     
-    /**
-     * 可绘制对象接口
-     */
     private interface Drawable {
         void draw(Graphics2D g);
     }
     
-    /**
-     * 矩形绘制类
-     */
     private static class RectDrawable implements Drawable {
         private float x, y, width, height;
         private Color color;
@@ -212,9 +175,6 @@ public class Renderer extends JFrame {
         }
     }
     
-    /**
-     * 圆形绘制类
-     */
     private static class CircleDrawable implements Drawable {
         private float x, y, radius;
         private Color color;
@@ -233,9 +193,6 @@ public class Renderer extends JFrame {
         }
     }
     
-    /**
-     * 线条绘制类
-     */
     private static class LineDrawable implements Drawable {
         private float x1, y1, x2, y2;
         private Color color;
@@ -252,6 +209,30 @@ public class Renderer extends JFrame {
         public void draw(Graphics2D g) {
             g.setColor(color);
             g.drawLine((int) x1, (int) y1, (int) x2, (int) y2);
+        }
+    }
+    
+    private static class TextDrawable implements Drawable {
+        private float x, y;
+        private String text;
+        private Color color;
+        
+        public TextDrawable(float x, float y, String text, float r, float g, float b, float a) {
+            this.x = x;
+            this.y = y;
+            this.text = text;
+            this.color = new Color(r, g, b, a);
+        }
+        
+        @Override
+        public void draw(Graphics2D g) {
+            g.setColor(color);
+            g.setFont(new Font("Arial", Font.BOLD, 48));
+            FontMetrics fm = g.getFontMetrics();
+            int textWidth = fm.stringWidth(text);
+            int textX = (int) x - textWidth / 2;
+            int textY = (int) y + fm.getAscent() / 3;
+            g.drawString(text, textX, textY);
         }
     }
 }

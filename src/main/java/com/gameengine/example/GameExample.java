@@ -8,21 +8,15 @@ import com.gameengine.graphics.Renderer;
 import com.gameengine.math.Vector2;
 import com.gameengine.scene.Scene;
 
-import java.util.List;
 import java.util.Random;
 
-/**
- * 游戏示例
- */
 public class GameExample {
     public static void main(String[] args) {
         System.out.println("启动游戏引擎...");
         
         try {
-            // 创建游戏引擎
-            GameEngine engine = new GameEngine(800, 600, "游戏引擎");
+            GameEngine engine = new GameEngine(1920, 1080, "游戏引擎");
             
-            // 创建游戏场景
             Scene gameScene = new Scene("GameScene") {
                 private Renderer renderer;
                 private Random random;
@@ -36,10 +30,10 @@ public class GameExample {
                     this.random = new Random();
                     this.time = 0;
                     this.gameLogic = new GameLogic(this);
+                    this.gameLogic.setGameEngine(engine);
                     
-                    // 创建游戏对象
                     createPlayer();
-                    createEnemies();
+                    createAIPlayers();
                     createDecorations();
                 }
                 
@@ -48,29 +42,35 @@ public class GameExample {
                     super.update(deltaTime);
                     time += deltaTime;
                     
-                    // 使用游戏逻辑类处理游戏规则
-                    gameLogic.handlePlayerInput();
+                    gameLogic.handlePlayerInput(deltaTime);
+                    gameLogic.handleAIPlayerMovement(deltaTime);
+                    gameLogic.handleAIPlayerAvoidance(deltaTime);
                     gameLogic.updatePhysics();
                     gameLogic.checkCollisions();
                     
-                    // 生成新敌人
-                    if (time > 2.0f) {
-                        createEnemy();
+                    if (gameLogic.isGameOver()) {
+                        return;
+                    }
+                    
+                    if (time >= 2.0f) {
+                        createAIPlayer();
                         time = 0;
                     }
                 }
                 
                 @Override
                 public void render() {
-                    // 绘制背景
-                    renderer.drawRect(0, 0, 800, 600, 0.1f, 0.1f, 0.2f, 1.0f);
+                    renderer.drawRect(0, 0, 1920, 1080, 0.1f, 0.1f, 0.2f, 1.0f);
                     
-                    // 渲染所有对象
                     super.render();
+                    
+                    if (gameLogic.isGameOver()) {
+                        renderer.drawRect(760, 490, 400, 100, 0.0f, 0.0f, 0.0f, 0.7f);
+                        renderer.drawText(960, 540, "GAME OVER", 1.0f, 1.0f, 1.0f, 1.0f);
+                    }
                 }
                 
                 private void createPlayer() {
-                    // 创建葫芦娃 - 所有部位都在一个GameObject中
                     GameObject player = new GameObject("Player") {
                         private Vector2 basePosition;
                         
@@ -78,14 +78,11 @@ public class GameExample {
                         public void update(float deltaTime) {
                             super.update(deltaTime);
                             updateComponents(deltaTime);
-                            
-                            // 更新所有部位的位置
                             updateBodyParts();
                         }
                         
                         @Override
                         public void render() {
-                            // 渲染所有部位
                             renderBodyParts();
                         }
                         
@@ -99,50 +96,44 @@ public class GameExample {
                         private void renderBodyParts() {
                             if (basePosition == null) return;
                             
-                            // 渲染身体
                             renderer.drawRect(
                                 basePosition.x - 8, basePosition.y - 10, 16, 20,
-                                1.0f, 0.0f, 0.0f, 1.0f  // 红色
+                                1.0f, 0.0f, 0.0f, 1.0f
                             );
                             
-                            // 渲染头部
                             renderer.drawRect(
                                 basePosition.x - 6, basePosition.y - 22, 12, 12,
-                                1.0f, 0.5f, 0.0f, 1.0f  // 橙色
+                                1.0f, 0.5f, 0.0f, 1.0f
                             );
                             
-                            // 渲染左臂
                             renderer.drawRect(
                                 basePosition.x - 13, basePosition.y - 5, 6, 12,
-                                1.0f, 0.8f, 0.0f, 1.0f  // 黄色
+                                1.0f, 0.8f, 0.0f, 1.0f
                             );
                             
-                            // 渲染右臂
                             renderer.drawRect(
                                 basePosition.x + 7, basePosition.y - 5, 6, 12,
-                                0.0f, 1.0f, 0.0f, 1.0f  // 绿色
+                                0.0f, 1.0f, 0.0f, 1.0f
                             );
                         }
                     };
                     
-                    // 添加变换组件
-                    TransformComponent transform = player.addComponent(new TransformComponent(new Vector2(400, 300)));
+                    player.addComponent(new TransformComponent(new Vector2(960, 540)));
                     
-                    // 添加物理组件
                     PhysicsComponent physics = player.addComponent(new PhysicsComponent(1.0f));
                     physics.setFriction(0.95f);
                     
                     addGameObject(player);
                 }
                 
-                private void createEnemies() {
-                    for (int i = 0; i < 3; i++) {
-                        createEnemy();
+                private void createAIPlayers() {
+                    for (int i = 0; i < 30; i++) {
+                        createAIPlayer();
                     }
                 }
                 
-                private void createEnemy() {
-                    GameObject enemy = new GameObject("Enemy") {
+                private void createAIPlayer() {
+                    GameObject aiPlayer = new GameObject("AIPlayer") {
                         @Override
                         public void update(float deltaTime) {
                             super.update(deltaTime);
@@ -155,32 +146,31 @@ public class GameExample {
                         }
                     };
                     
-                    // 随机位置
-                    Vector2 position = new Vector2(
-                        random.nextFloat() * 800,
-                        random.nextFloat() * 600
-                    );
+                    Vector2 position;
+                    do {
+                        position = new Vector2(
+                            random.nextFloat() * 1920,
+                            random.nextFloat() * 1080
+                        );
+                    } while (position.distance(new Vector2(960, 540)) < 100);
                     
-                    // 添加变换组件
-                    TransformComponent transform = enemy.addComponent(new TransformComponent(position));
+                    aiPlayer.addComponent(new TransformComponent(position));
                     
-                    // 添加渲染组件 - 改为矩形，使用橙色
-                    RenderComponent render = enemy.addComponent(new RenderComponent(
+                    RenderComponent render = aiPlayer.addComponent(new RenderComponent(
                         RenderComponent.RenderType.RECTANGLE,
                         new Vector2(20, 20),
-                        new RenderComponent.Color(1.0f, 0.5f, 0.0f, 1.0f)  // 橙色
+                        new RenderComponent.Color(0.0f, 0.8f, 1.0f, 1.0f)
                     ));
                     render.setRenderer(renderer);
                     
-                    // 添加物理组件
-                    PhysicsComponent physics = enemy.addComponent(new PhysicsComponent(0.5f));
+                    PhysicsComponent physics = aiPlayer.addComponent(new PhysicsComponent(0.5f));
                     physics.setVelocity(new Vector2(
-                        (random.nextFloat() - 0.5f) * 100,
-                        (random.nextFloat() - 0.5f) * 100
+                        (random.nextFloat() - 0.5f) * 150,
+                        (random.nextFloat() - 0.5f) * 150
                     ));
                     physics.setFriction(0.98f);
                     
-                    addGameObject(enemy);
+                    addGameObject(aiPlayer);
                 }
                 
                 private void createDecorations() {
@@ -203,16 +193,13 @@ public class GameExample {
                         }
                     };
                     
-                    // 随机位置
                     Vector2 position = new Vector2(
-                        random.nextFloat() * 800,
-                        random.nextFloat() * 600
+                        random.nextFloat() * 1920,
+                        random.nextFloat() * 1080
                     );
                     
-                    // 添加变换组件
-                    TransformComponent transform = decoration.addComponent(new TransformComponent(position));
+                    decoration.addComponent(new TransformComponent(position));
                     
-                    // 添加渲染组件
                     RenderComponent render = decoration.addComponent(new RenderComponent(
                         RenderComponent.RenderType.CIRCLE,
                         new Vector2(5, 5),
@@ -224,10 +211,7 @@ public class GameExample {
                 }
             };
             
-            // 设置场景
             engine.setScene(gameScene);
-            
-            // 运行游戏
             engine.run();
             
         } catch (Exception e) {

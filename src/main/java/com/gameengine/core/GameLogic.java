@@ -286,7 +286,6 @@ public class GameLogic {
                 float distance = playerPos.distance(aiTransform.getPosition());
                 if (distance < 30) {
                     gameOver = true;
-                    System.out.println("游戏结束！玩家碰撞到其他玩家！");
                     return;
                 }
             }

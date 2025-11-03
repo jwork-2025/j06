@@ -11,8 +11,9 @@ public class Game {
         GameEngine engine = null;
         try {
             engine = new GameEngine(1024, 768, "游戏引擎", RenderBackend.GPU);
-            MenuScene menuScene = new MenuScene(engine, "MainMenu");
-            engine.setScene(menuScene);
+            // Server 直接进入 GameScene
+            GameScene gameScene = new GameScene(engine);
+            engine.setScene(gameScene);
             engine.run();
         } catch (Exception e) {
         } finally {

@@ -11,8 +11,9 @@ public class ClientLauncher {
         NioClient client = new NioClient();
         if (client.connect(host, 7777) && client.join("Player2")) {
             client.startInputLoop(engine.getInputManager());
+            client.startReceiveLoop();
         }
-        engine.setScene(new GameScene(engine));
+        engine.setScene(new GameScene(engine, GameScene.Mode.CLIENT));
         engine.run();
         engine.cleanup();
     }

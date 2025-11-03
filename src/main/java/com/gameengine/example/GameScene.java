@@ -14,7 +14,9 @@ import com.gameengine.scene.Scene;
 import java.util.*;
 
 public class GameScene extends Scene {
+    public enum Mode { SERVER, CLIENT }
     private final GameEngine engine;
+    private final Mode mode;
     private IRenderer renderer;
     private Random random;
     private float time;
@@ -29,9 +31,12 @@ public class GameScene extends Scene {
     private final float freezeDelay = 0.20f;
     private boolean networkPlayerSpawned = false;
 
-    public GameScene(GameEngine engine) {
+    public GameScene(GameEngine engine) { this(engine, Mode.SERVER); }
+
+    public GameScene(GameEngine engine, Mode mode) {
         super("GameScene");
         this.engine = engine;
+        this.mode = mode;
     }
 
     @Override
@@ -46,9 +51,13 @@ public class GameScene extends Scene {
         this.waitInputTimer = 0f;
         this.freezeTimer = 0f;
 
-        createPlayer();
-        createAIPlayers();
-        createDecorations();
+        if (mode == Mode.SERVER) {
+            createPlayer();
+            createAIPlayers();
+            createDecorations();
+        } else {
+            // CLIENT 模式：对象由网络同步创建；此处暂不本地生成
+        }
 
         // 若已有网络客户端连接，生成第二玩家占位
         if (com.gameengine.net.NetState.hasClient()) {
@@ -69,12 +78,16 @@ public class GameScene extends Scene {
         super.update(deltaTime);
         time += deltaTime;
 
-        gameLogic.handlePlayerInput(deltaTime);
-        gameLogic.handleAIPlayerMovement(deltaTime);
-        gameLogic.handleAIPlayerAvoidance(deltaTime);
+        if (mode == Mode.SERVER) {
+            gameLogic.handlePlayerInput(deltaTime);
+            gameLogic.handleAIPlayerMovement(deltaTime);
+            gameLogic.handleAIPlayerAvoidance(deltaTime);
+        }
 
         boolean wasGameOver = gameLogic.isGameOver();
-        gameLogic.checkCollisions();
+        if (mode == Mode.SERVER) {
+            gameLogic.checkCollisions();
+        }
 
         if (gameLogic.isGameOver() && !wasGameOver) {
             GameObject player = gameLogic.getUserPlayer();
@@ -106,7 +119,9 @@ public class GameScene extends Scene {
             }
         }
 
-        updateParticles(deltaTime);
+        if (mode == Mode.SERVER) {
+            updateParticles(deltaTime);
+        }
 
         if (waitingReturn) {
             waitInputTimer += deltaTime;
@@ -119,13 +134,41 @@ public class GameScene extends Scene {
             return;
         }
 
-        if (time >= 1.0f) {
+        if (mode == Mode.SERVER && time >= 1.0f) {
             if (!networkPlayerSpawned && com.gameengine.net.NetState.hasClient()) {
                 createNetworkPlayer();
                 networkPlayerSpawned = true;
             }
             createAIPlayer();
             time = 0;
+        }
+
+        // SERVER 广播状态快照
+        if (mode == Mode.SERVER) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("STATE:");
+            boolean first = true;
+            for (GameObject obj : getGameObjects()) {
+                TransformComponent tc = obj.getComponent(TransformComponent.class);
+                if (tc == null) continue;
+                Vector2 p = tc.getPosition();
+                if (!first) sb.append(';');
+                sb.append(obj.getName()).append(',').append((int)p.x).append(',').append((int)p.y);
+                first = false;
+            }
+            com.gameengine.net.NetState.setLastState(sb.toString());
+        }
+
+        // CLIENT 应用镜像
+        if (mode == Mode.CLIENT) {
+            java.util.Map<String, float[]> snap = com.gameengine.net.NetState.getMirrorSnapshot();
+            for (java.util.Map.Entry<String, float[]> e : snap.entrySet()) {
+                String id = e.getKey();
+                float[] xy = e.getValue();
+                GameObject obj = findOrCreateMirror(id);
+                TransformComponent tc = obj.getComponent(TransformComponent.class);
+                if (tc != null) tc.setPosition(new Vector2(xy[0], xy[1]));
+            }
         }
     }
 
@@ -275,7 +318,12 @@ public class GameScene extends Scene {
             }
         };
 
-        player.addComponent(new TransformComponent(new Vector2(renderer.getWidth() / 2.0f, renderer.getHeight() / 2.0f)));
+        float px = random.nextFloat() * renderer.getWidth();
+        float py = random.nextFloat() * renderer.getHeight();
+        // 留出20像素安全边距
+        px = Math.max(20, Math.min(renderer.getWidth() - 20, px));
+        py = Math.max(20, Math.min(renderer.getHeight() - 20, py));
+        player.addComponent(new TransformComponent(new Vector2(px, py)));
 
         PhysicsComponent physics = player.addComponent(new PhysicsComponent(1.0f));
         physics.setFriction(0.95f);
@@ -359,6 +407,26 @@ public class GameScene extends Scene {
         PhysicsComponent physics = p2.addComponent(new PhysicsComponent(1.0f));
         physics.setFriction(0.95f);
         addGameObject(p2);
+    }
+
+    // CLIENT: 按 id 查找或创建镜像对象
+    private GameObject findOrCreateMirror(String id) {
+        for (GameObject o : getGameObjects()) {
+            if (id.equals(o.getName())) return o;
+        }
+        GameObject ghost = new GameObject(id) {
+            @Override public void update(float dt) { super.update(dt); updateComponents(dt); }
+            @Override public void render() { renderComponents(); }
+        };
+        ghost.addComponent(new TransformComponent(new Vector2(0,0)));
+        RenderComponent rc = ghost.addComponent(new RenderComponent(
+            RenderComponent.RenderType.RECTANGLE,
+            new Vector2(10,10),
+            new RenderComponent.Color(0.9f,0.9f,0.2f,1f)
+        ));
+        rc.setRenderer(renderer);
+        addGameObject(ghost);
+        return ghost;
     }
 
     private void createDecorations() {

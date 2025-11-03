@@ -60,6 +60,33 @@ public class NioClient {
         t.setDaemon(true);
         t.start();
     }
+
+    public void startReceiveLoop() {
+        if (channel == null) return;
+        Thread t = new Thread(() -> {
+            ByteBuffer in = ByteBuffer.allocate(4096);
+            StringBuilder sb = new StringBuilder();
+            try {
+                while (channel.isOpen()) {
+                    in.clear();
+                    int n = channel.read(in);
+                    if (n <= 0) { try { Thread.sleep(50);} catch (InterruptedException ignored) {} continue; }
+                    sb.append(new String(in.array(), 0, n));
+                    int idx;
+                    while ((idx = sb.indexOf("\n")) >= 0) {
+                        String line = sb.substring(0, idx).trim();
+                        sb.delete(0, idx + 1);
+                        if (!line.isEmpty()) {
+                            com.gameengine.net.NetState.updateMirrorFromState(line);
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }, "client-recv-loop");
+        t.setDaemon(true);
+        t.start();
+    }
 }
 
 

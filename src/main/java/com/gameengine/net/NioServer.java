@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 public class NioServer implements Runnable {
     private final int port;
@@ -30,6 +32,8 @@ public class NioServer implements Runnable {
             ssc.register(selector, SelectionKey.OP_ACCEPT);
 
             ByteBuffer buf = ByteBuffer.allocate(1024);
+            List<SocketChannel> conns = new ArrayList<>();
+            long lastBroadcast = System.currentTimeMillis();
             while (running) {
                 selector.select(250);
                 Iterator<SelectionKey> it = selector.selectedKeys().iterator();
@@ -42,12 +46,13 @@ public class NioServer implements Runnable {
                             ch.configureBlocking(false);
                             ch.register(selector, SelectionKey.OP_READ);
                             NetState.clientConnected();
+                            conns.add(ch);
                         }
                     } else if (key.isReadable()) {
                         SocketChannel ch = (SocketChannel) key.channel();
                         buf.clear();
                         int n = ch.read(buf);
-                        if (n <= 0) { key.cancel(); ch.close(); continue; }
+                        if (n <= 0) { key.cancel(); ch.close(); conns.remove(ch); continue; }
                         buf.flip();
                         String s = new String(buf.array(), 0, buf.limit());
                         if (s.startsWith("JOIN:")) {
@@ -61,6 +66,20 @@ public class NioServer implements Runnable {
                                 float vy = Float.parseFloat(kv[1]);
                                 NetState.setP2Velocity(vx, vy);
                             } catch (Exception ignored) {}
+                        }
+                    }
+                }
+                long now = System.currentTimeMillis();
+                if (now - lastBroadcast >= 100) {
+                    lastBroadcast = now;
+                    String state = NetState.getLastState();
+                    if (state != null && !state.isEmpty()) {
+                        ByteBuffer out = ByteBuffer.wrap((state + "\n").getBytes());
+                        for (int i = conns.size() - 1; i >= 0; i--) {
+                            SocketChannel ch = conns.get(i);
+                            if (!ch.isOpen()) { conns.remove(i); continue; }
+                            out.rewind();
+                            try { while (out.hasRemaining()) ch.write(out); } catch (IOException ignored) {}
                         }
                     }
                 }

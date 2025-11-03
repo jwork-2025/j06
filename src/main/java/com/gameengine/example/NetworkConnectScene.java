@@ -41,7 +41,8 @@ public class NetworkConnectScene extends Scene {
             if (client.connect(host, 7777) && client.join("Player2")) {
                 status = "CONNECTED: " + host;
                 client.startInputLoop(engine.getInputManager());
-                engine.setScene(new GameScene(engine));
+                client.startReceiveLoop();
+                engine.setScene(new GameScene(engine, GameScene.Mode.CLIENT));
                 return;
             } else {
                 status = "CONNECT FAILED";

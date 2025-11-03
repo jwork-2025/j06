@@ -93,6 +93,18 @@ public class InputManager {
         return false;
     }
     
+    public boolean isAnyKeyJustPressed() {
+        return !justPressedKeys.isEmpty();
+    }
+    
+    public boolean isAnyKeyPressed() {
+        return !pressedKeys.isEmpty();
+    }
+
+    public java.util.Set<Integer> getJustPressedKeysSnapshot() {
+        return new java.util.HashSet<>(justPressedKeys);
+    }
+    
     public Vector2 getMousePosition() {
         return new Vector2(mousePosition);
     }

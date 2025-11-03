@@ -1,16 +1,16 @@
 package com.gameengine.core;
 
-import com.gameengine.components.TransformComponent;
 import com.gameengine.components.PhysicsComponent;
+import com.gameengine.components.TransformComponent;
 import com.gameengine.input.InputManager;
 import com.gameengine.math.Vector2;
 import com.gameengine.scene.Scene;
 
-import java.util.List;
-import java.util.Random;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -25,7 +25,7 @@ public class GameLogic {
     private GameEngine gameEngine;
     private Map<GameObject, Vector2> aiTargetVelocities;
     private Map<GameObject, Float> aiTargetUpdateTimers;
-    private ExecutorService physicsExecutor;
+    private ExecutorService avoidanceExecutor;
     
     public GameLogic(Scene scene) {
         this.scene = scene;
@@ -35,18 +35,18 @@ public class GameLogic {
         this.aiTargetVelocities = new HashMap<>();
         this.aiTargetUpdateTimers = new HashMap<>();
         int threadCount = Math.max(2, Runtime.getRuntime().availableProcessors() - 1);
-        this.physicsExecutor = Executors.newFixedThreadPool(threadCount);
+        this.avoidanceExecutor = Executors.newFixedThreadPool(threadCount);
     }
     
     public void cleanup() {
-        if (physicsExecutor != null && !physicsExecutor.isShutdown()) {
-            physicsExecutor.shutdown();
+        if (avoidanceExecutor != null && !avoidanceExecutor.isShutdown()) {
+            avoidanceExecutor.shutdown();
             try {
-                if (!physicsExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
-                    physicsExecutor.shutdownNow();
+                if (!avoidanceExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
+                    avoidanceExecutor.shutdownNow();
                 }
             } catch (InterruptedException e) {
-                physicsExecutor.shutdownNow();
+                avoidanceExecutor.shutdownNow();
                 Thread.currentThread().interrupt();
             }
         }
@@ -60,7 +60,7 @@ public class GameLogic {
         return gameOver;
     }
     
-    private GameObject getUserPlayer() {
+    public GameObject getUserPlayer() {
         for (GameObject obj : scene.getGameObjects()) {
             if (obj.getName().equals("Player") && obj.hasComponent(PhysicsComponent.class)) {
                 return obj;
@@ -69,7 +69,7 @@ public class GameLogic {
         return null;
     }
     
-    private List<GameObject> getAIPlayers() {
+    public List<GameObject> getAIPlayers() {
         return scene.getGameObjects().stream()
             .filter(obj -> obj.getName().equals("AIPlayer"))
             .filter(obj -> obj.isActive())
@@ -89,16 +89,20 @@ public class GameLogic {
         
         Vector2 movement = new Vector2();
         
-        if (inputManager.isKeyPressed(87) || inputManager.isKeyPressed(38)) {
+        // W / UpArrow (AWT=38, GLFW=265)
+        if (inputManager.isKeyPressed(87) || inputManager.isKeyPressed(38) || inputManager.isKeyPressed(265)) {
             movement.y -= 1;
         }
-        if (inputManager.isKeyPressed(83) || inputManager.isKeyPressed(40)) {
+        // S / DownArrow (AWT=40, GLFW=264)
+        if (inputManager.isKeyPressed(83) || inputManager.isKeyPressed(40) || inputManager.isKeyPressed(264)) {
             movement.y += 1;
         }
-        if (inputManager.isKeyPressed(65) || inputManager.isKeyPressed(37)) {
+        // A / LeftArrow (AWT=37, GLFW=263)
+        if (inputManager.isKeyPressed(65) || inputManager.isKeyPressed(37) || inputManager.isKeyPressed(263)) {
             movement.x -= 1;
         }
-        if (inputManager.isKeyPressed(68) || inputManager.isKeyPressed(39)) {
+        // D / RightArrow (AWT=39, GLFW=262)
+        if (inputManager.isKeyPressed(68) || inputManager.isKeyPressed(39) || inputManager.isKeyPressed(262)) {
             movement.x += 1;
         }
         
@@ -108,10 +112,12 @@ public class GameLogic {
         }
         
         Vector2 pos = transform.getPosition();
+        int screenW = gameEngine != null && gameEngine.getRenderer() != null ? gameEngine.getRenderer().getWidth() : 1920;
+        int screenH = gameEngine != null && gameEngine.getRenderer() != null ? gameEngine.getRenderer().getHeight() : 1080;
         if (pos.x < 0) pos.x = 0;
         if (pos.y < 0) pos.y = 0;
-        if (pos.x > 1920 - 20) pos.x = 1920 - 20;
-        if (pos.y > 1080 - 20) pos.y = 1080 - 20;
+        if (pos.x > screenW - 20) pos.x = screenW - 20;
+        if (pos.y > screenH - 20) pos.y = screenH - 20;
         transform.setPosition(pos);
     }
     
@@ -163,70 +169,6 @@ public class GameLogic {
         }
     }
     
-    public void updatePhysics() {
-        if (gameOver) return;
-        
-        List<PhysicsComponent> physicsComponents = scene.getComponents(PhysicsComponent.class);
-        if (physicsComponents.isEmpty()) return;
-        
-        int threadCount = Runtime.getRuntime().availableProcessors() - 1;
-        threadCount = Math.max(2, threadCount);
-        int batchSize = Math.max(1, physicsComponents.size() / threadCount + 1);
-        
-        List<Future<?>> futures = new ArrayList<>();
-        
-        for (int i = 0; i < physicsComponents.size(); i += batchSize) {
-            final int start = i;
-            final int end = Math.min(i + batchSize, physicsComponents.size());
-            
-            Future<?> future = physicsExecutor.submit(() -> {
-                for (int j = start; j < end; j++) {
-                    PhysicsComponent physics = physicsComponents.get(j);
-                    updateSinglePhysics(physics);
-                }
-            });
-            
-            futures.add(future);
-        }
-        
-        for (Future<?> future : futures) {
-            try {
-                future.get();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    }
-    
-    private void updateSinglePhysics(PhysicsComponent physics) {
-        TransformComponent transform = physics.getOwner().getComponent(TransformComponent.class);
-        if (transform != null) {
-            Vector2 pos = transform.getPosition();
-            Vector2 velocity = physics.getVelocity();
-            
-            boolean velocityChanged = false;
-            
-            if (pos.x <= 0 || pos.x >= 1920 - 15) {
-                velocity.x = -velocity.x;
-                velocityChanged = true;
-            }
-            if (pos.y <= 0 || pos.y >= 1080 - 15) {
-                velocity.y = -velocity.y;
-                velocityChanged = true;
-            }
-            
-            if (pos.x < 0) pos.x = 0;
-            if (pos.y < 0) pos.y = 0;
-            if (pos.x > 1920 - 15) pos.x = 1920 - 15;
-            if (pos.y > 1080 - 15) pos.y = 1080 - 15;
-            
-            transform.setPosition(pos);
-            
-            if (velocityChanged) {
-                physics.setVelocity(velocity);
-            }
-        }
-    }
     
     public void handleAIPlayerAvoidance(float deltaTime) {
         if (gameOver) return;
@@ -258,7 +200,7 @@ public class GameLogic {
             final int start = i;
             final int end = Math.min(i + batchSize, aiPlayers.size());
             
-            Future<?> future = physicsExecutor.submit(() -> {
+            Future<?> future = avoidanceExecutor.submit(() -> {
                 for (int j = start; j < end; j++) {
                     processAvoidanceForPlayer(aiPlayers, j, deltaTime);
                 }
@@ -344,9 +286,6 @@ public class GameLogic {
                 float distance = playerPos.distance(aiTransform.getPosition());
                 if (distance < 30) {
                     gameOver = true;
-                    if (gameEngine != null) {
-                        gameEngine.stop();
-                    }
                     System.out.println("游戏结束！玩家碰撞到其他玩家！");
                     return;
                 }

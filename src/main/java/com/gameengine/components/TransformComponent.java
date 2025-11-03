@@ -30,10 +30,6 @@ public class TransformComponent extends Component<TransformComponent> {
     }
     
     @Override
-    public void update(float deltaTime) {
-    }
-    
-    @Override
     public void render() {
     }
     

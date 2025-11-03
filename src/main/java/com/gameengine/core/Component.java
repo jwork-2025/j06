@@ -12,7 +12,8 @@ public abstract class Component<T extends Component<T>> {
     
     public abstract void initialize();
     
-    public abstract void update(float deltaTime);
+    public void update(float deltaTime) {
+    }
     
     public abstract void render();
     

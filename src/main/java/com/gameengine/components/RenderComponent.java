@@ -1,11 +1,11 @@
 package com.gameengine.components;
 
 import com.gameengine.core.Component;
-import com.gameengine.graphics.Renderer;
+import com.gameengine.graphics.IRenderer;
 import com.gameengine.math.Vector2;
 
 public class RenderComponent extends Component<RenderComponent> {
-    private Renderer renderer;
+    private IRenderer renderer;
     private RenderType renderType;
     private Vector2 size;
     private Color color;
@@ -51,10 +51,6 @@ public class RenderComponent extends Component<RenderComponent> {
     }
     
     @Override
-    public void update(float deltaTime) {
-    }
-    
-    @Override
     public void render() {
         if (!visible || renderer == null) {
             return;
@@ -84,7 +80,7 @@ public class RenderComponent extends Component<RenderComponent> {
         }
     }
     
-    public void setRenderer(Renderer renderer) {
+    public void setRenderer(IRenderer renderer) {
         this.renderer = renderer;
     }
     

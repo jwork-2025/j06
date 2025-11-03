@@ -1,3 +1,28 @@
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Build outputs
+build/
+out/
+target/
+
+# Local libs/binaries
+lib/
+*.dll
+*.so
+*.dylib
+
+# Recordings (generated at runtime)
+recordings/
+
+# Logs
+*.log
+
+# Shell history/backups
+*~
+*.swp
 # 编译输出目录
 build/
 target/

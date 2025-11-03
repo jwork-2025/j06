@@ -30,26 +30,6 @@ public class PhysicsComponent extends Component<PhysicsComponent> {
     }
     
     @Override
-    public void update(float deltaTime) {
-        if (!enabled) return;
-        
-        TransformComponent transform = owner.getComponent(TransformComponent.class);
-        if (transform == null) return;
-        
-        if (useGravity) {
-            acceleration = acceleration.add(gravity);
-        }
-        
-        velocity = velocity.add(acceleration.multiply(deltaTime));
-        velocity = velocity.multiply(friction);
-        
-        Vector2 deltaPosition = velocity.multiply(deltaTime);
-        transform.translate(deltaPosition);
-        
-        acceleration = new Vector2();
-    }
-    
-    @Override
     public void render() {
     }
     
@@ -71,6 +51,10 @@ public class PhysicsComponent extends Component<PhysicsComponent> {
     
     public void setVelocity(float x, float y) {
         this.velocity = new Vector2(x, y);
+    }
+    
+    public void setAcceleration(Vector2 acceleration) {
+        this.acceleration = new Vector2(acceleration);
     }
     
     public void addVelocity(Vector2 delta) {

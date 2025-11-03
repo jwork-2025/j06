@@ -27,6 +27,7 @@ public class GameScene extends Scene {
     private float freezeTimer;
     private final float inputCooldown = 0.25f;
     private final float freezeDelay = 0.20f;
+    private boolean networkPlayerSpawned = false;
 
     public GameScene(GameEngine engine) {
         super("GameScene");
@@ -48,6 +49,12 @@ public class GameScene extends Scene {
         createPlayer();
         createAIPlayers();
         createDecorations();
+
+        // 若已有网络客户端连接，生成第二玩家占位
+        if (com.gameengine.net.NetState.hasClient()) {
+            createNetworkPlayer();
+            networkPlayerSpawned = true;
+        }
 
         collisionParticles = new ArrayList<>();
         aiPlayerParticles = new HashMap<>();
@@ -113,6 +120,10 @@ public class GameScene extends Scene {
         }
 
         if (time >= 1.0f) {
+            if (!networkPlayerSpawned && com.gameengine.net.NetState.hasClient()) {
+                createNetworkPlayer();
+                networkPlayerSpawned = true;
+            }
             createAIPlayer();
             time = 0;
         }
@@ -317,6 +328,37 @@ public class GameScene extends Scene {
         physics.setFriction(0.98f);
 
         addGameObject(aiPlayer);
+    }
+
+    private void createNetworkPlayer() {
+        GameObject p2 = new GameObject("Player2") {
+            @Override
+            public void update(float deltaTime) {
+                super.update(deltaTime);
+                updateComponents(deltaTime);
+                PhysicsComponent pc = getComponent(PhysicsComponent.class);
+                if (pc != null) {
+                    float vx = com.gameengine.net.NetState.getP2Vx();
+                    float vy = com.gameengine.net.NetState.getP2Vy();
+                    pc.setVelocity(new Vector2(vx, vy));
+                }
+            }
+
+            @Override
+            public void render() {
+                renderComponents();
+            }
+        };
+        p2.addComponent(new TransformComponent(new Vector2(renderer.getWidth() / 2.0f + 40, renderer.getHeight() / 2.0f)));
+        RenderComponent rc = p2.addComponent(new RenderComponent(
+            RenderComponent.RenderType.RECTANGLE,
+            new Vector2(20,20),
+            new RenderComponent.Color(0.2f, 1.0f, 0.2f, 1.0f)
+        ));
+        rc.setRenderer(renderer);
+        PhysicsComponent physics = p2.addComponent(new PhysicsComponent(1.0f));
+        physics.setFriction(0.95f);
+        addGameObject(p2);
     }
 
     private void createDecorations() {

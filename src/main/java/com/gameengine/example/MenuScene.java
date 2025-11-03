@@ -17,6 +17,7 @@ public class MenuScene extends Scene {
     public enum MenuOption {
         START_GAME,
         REPLAY,
+        NETWORK,
         EXIT
     }
     
@@ -37,7 +38,7 @@ public class MenuScene extends Scene {
         this.renderer = engine.getRenderer();
         this.inputManager = InputManager.getInstance();
         this.selectedIndex = 0;
-        this.options = new MenuOption[]{MenuOption.START_GAME, MenuOption.REPLAY, MenuOption.EXIT};
+        this.options = new MenuOption[]{MenuOption.START_GAME, MenuOption.REPLAY, MenuOption.NETWORK, MenuOption.EXIT};
         this.selectionMade = false;
         this.selectedOption = null;
         this.replayFiles = new ArrayList<>();
@@ -80,6 +81,9 @@ public class MenuScene extends Scene {
                 engine.disableRecording();
                 Scene replay = new ReplayScene(engine, null);
                 engine.setScene(replay);
+            } else if (selectedOption == MenuOption.NETWORK) {
+                engine.disableRecording();
+                engine.setScene(new NetworkConnectScene(engine));
             } else if (selectedOption == MenuOption.EXIT) {
                 engine.stop();
                 engine.cleanup();
@@ -90,9 +94,10 @@ public class MenuScene extends Scene {
         Vector2 mousePos = inputManager.getMousePosition();
         if (inputManager.isMouseButtonJustPressed(0)) {
             float centerY = renderer.getHeight() / 2.0f;
-            float buttonY1 = centerY - 80;
-            float buttonY2 = centerY + 0;
-            float buttonY3 = centerY + 80;
+            float buttonY1 = centerY - 120;
+            float buttonY2 = centerY - 40;
+            float buttonY3 = centerY + 40;
+            float buttonY4 = centerY + 120;
             
             if (mousePos.y >= buttonY1 - 30 && mousePos.y <= buttonY1 + 30) {
                 selectedIndex = 0;
@@ -106,6 +111,11 @@ public class MenuScene extends Scene {
                 engine.setScene(replay);
             } else if (mousePos.y >= buttonY3 - 30 && mousePos.y <= buttonY3 + 30) {
                 selectedIndex = 2;
+                selectedOption = MenuOption.NETWORK;
+                engine.disableRecording();
+                engine.setScene(new NetworkConnectScene(engine));
+            } else if (mousePos.y >= buttonY4 - 30 && mousePos.y <= buttonY4 + 30) {
+                selectedIndex = 3;
                 selectionMade = true;
                 selectedOption = MenuOption.EXIT;
                 engine.stop();
@@ -187,13 +197,15 @@ public class MenuScene extends Scene {
                 text = "START GAME";
             } else if (options[i] == MenuOption.REPLAY) {
                 text = "REPLAY";
+            } else if (options[i] == MenuOption.NETWORK) {
+                text = "NETWORK";
             } else if (options[i] == MenuOption.EXIT) {
                 text = "EXIT";
             }
             
             float textWidth = text.length() * 20.0f;
             float textX = centerX - textWidth / 2.0f;
-            float textY = centerY - 80.0f + i * 80.0f;
+            float textY = centerY - 120.0f + i * 80.0f;
             
             float r, g, b;
             

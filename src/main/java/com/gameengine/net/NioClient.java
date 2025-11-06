@@ -14,8 +14,10 @@ public class NioClient {
             channel = SocketChannel.open();
             channel.configureBlocking(true);
             channel.connect(new InetSocketAddress(host, port));
+            System.out.println("[Client] Connected to " + host + ":" + port);
             return true;
         } catch (IOException e) {
+            System.err.println("[Client] Failed to connect to " + host + ":" + port + " - " + e.getMessage());
             return false;
         }
     }
@@ -25,12 +27,31 @@ public class NioClient {
         try {
             ByteBuffer out = ByteBuffer.wrap(("JOIN:" + name + "\n").getBytes());
             while (out.hasRemaining()) channel.write(out);
-            ByteBuffer in = ByteBuffer.allocate(1024);
-            int n = channel.read(in);
-            if (n <= 0) return false;
-            String s = new String(in.array(), 0, n);
-            return s.contains("JOIN-ACK");
+            
+            // 读取响应，可能需要多次读取才能得到 JOIN-ACK
+            ByteBuffer in = ByteBuffer.allocate(4096);
+            StringBuilder response = new StringBuilder();
+            long startTime = System.currentTimeMillis();
+            
+            while (System.currentTimeMillis() - startTime < 3000) { // 3秒超时
+                in.clear();
+                int n = channel.read(in);
+                if (n > 0) {
+                    response.append(new String(in.array(), 0, n));
+                    String s = response.toString();
+                    if (s.contains("JOIN-ACK")) {
+                        System.out.println("[Client] Join successful as " + name);
+                        return true;
+                    }
+                }
+                try { Thread.sleep(50); } catch (InterruptedException ignored) {}
+            }
+            
+            System.err.println("[Client] Join timeout, no JOIN-ACK received");
+            System.err.println("[Client] Received: " + response.toString().substring(0, Math.min(200, response.length())));
+            return false;
         } catch (IOException e) {
+            System.err.println("[Client] Join error: " + e.getMessage());
             return false;
         }
     }
@@ -63,9 +84,11 @@ public class NioClient {
 
     public void startReceiveLoop() {
         if (channel == null) return;
+        System.out.println("[Client] Starting receive loop...");
         Thread t = new Thread(() -> {
             ByteBuffer in = ByteBuffer.allocate(4096);
             StringBuilder sb = new StringBuilder();
+            int frameCount = 0;
             try {
                 while (channel.isOpen()) {
                     in.clear();
@@ -80,13 +103,18 @@ public class NioClient {
                             NetworkBuffer.Keyframe kf = NetworkBuffer.parseJsonLine(line);
                             if (kf != null) {
                                 NetworkBuffer.push(kf);
+                                frameCount++;
+                                if (frameCount % 50 == 0) {
+                                    System.out.println("[Client] Received " + frameCount + " keyframes, entities in last: " + kf.entities.size());
+                                }
                             } else {
                                 com.gameengine.net.NetState.updateMirrorFromState(line); // 兼容旧文本
                             }
                         }
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                System.err.println("[Client] Receive loop error: " + e.getMessage());
             }
         }, "client-recv-loop");
         t.setDaemon(true);
